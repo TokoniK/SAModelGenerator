@@ -1,7 +1,9 @@
 from sqlalchemy.sql.elements import Null
 
+
 __author__ = 'Ahmet Erkan ÇELİK'
 import re
+import inflect
 
 
 class metafactory:
@@ -11,6 +13,8 @@ class metafactory:
         ts = cur.fetchall()
         models = ""
         classes = ""
+        p = inflect.engine()
+
         for t in ts:
             # models += "%sTable = Table(u'%s', Base.metadata,\n %s%s,\n\n    #schema\n    schema='%s'\n)\n\n" % (str(t[1]).title(), t[1], metafactory.colums(cur, t[1]), metafactory.fk(cur, t[1], schema),schema)
             if classes != "":
@@ -20,18 +24,35 @@ class metafactory:
             colums = metafactory.colums(cur, t[1])
             br = metafactory.br(cur, t[1])
 
-            classes += "class %s(Base):\n    __tablename__ = u'%s'%s%s\n\n%s" % (className, tableName, colums, br, metafactory.toJsonMethod(cur, t[1]))
+            # classes += "class %s(DatabaseTable):\n    __tablename__ = u'%s'%s%s\n\n%s" % (className, tableName, colums, br, metafactory.toJsonMethod(cur, t[1]))
+            model_class = "class %s(DatabaseTable):\n    __tablename__ = u'%s'%s%s\n\n%s\n" % (p.singular_noun(className), tableName, colums, br, metafactory.toJsonMethod(cur, t[1]))
 
-        return classes
+            file = open('%s.py' % p.singular_noun(className.lower()), "w", encoding='utf-8')
+            file.write("""from sqlalchemy import *
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import *
+import json
+
+DatabaseTable = declarative_base()
+
+
+""")
+            file.write(model_class);
+            file.close()
+
+        # return classes
     @staticmethod
     def colums(cur, tablename):
+        print(cur,tablename)
         cur.execute("""
                         SELECT DISTINCT ON (attnum) pg_attribute.attnum,pg_attribute.attname as column_name,
                            format_type(pg_attribute.atttypid, pg_attribute.atttypmod) as data_type,
                            pg_attribute.attlen as lenght, pg_attribute.atttypmod as lenght_var,
                            pg_attribute.attnotnull as is_notnull,
                            pg_attribute.atthasdef as has_default,
-                           adsrc as default_value,
+                           --adsrc as default_value,
+                           '' as default_value,
                            pg_constraint.contype
                         FROM
                           pg_attribute
@@ -48,9 +69,10 @@ class metafactory:
         for c in cs:
             dt = c[2]
             if re.search("character varying", dt):
-                dt = "VARCHAR(length=%s)" % (int(c[4])-4)
+                print(c[4])
+                dt = "VARCHAR%s" % ('' if c[4] == -1 else '(%s)' % (int(c[4])-4))
             elif re.search("character", dt):
-                dt = "CHAR(length=%s)" % (int(c[4])-4)
+                dt = "CHAR%s" % ('' if c[4] == -1 else '(%s)' % (int(c[4])-4))
             elif re.search("timestamp", dt):
                 dt = "TIMESTAMP()"
             else:
@@ -139,7 +161,8 @@ class metafactory:
                            pg_attribute.attlen as lenght, pg_attribute.atttypmod as lenght_var,
                            pg_attribute.attnotnull as is_notnull,
                            pg_attribute.atthasdef as has_default,
-                           adsrc as default_value,
+                           --adsrc as default_value,
+                           '' as default_value,
                            pg_constraint.contype
                         FROM
                           pg_attribute
