@@ -8,7 +8,7 @@ import inflect
 
 class metafactory:
     @staticmethod
-    def tables(cur, schema="public"):
+    def tables(cur, schema="public", single_file=False):
         cur.execute("""SELECT * FROM  pg_tables WHERE schemaname = '%s'""" % schema)
         ts = cur.fetchall()
         models = ""
@@ -25,10 +25,12 @@ class metafactory:
             br = metafactory.br(cur, t[1])
 
             # classes += "class %s(DatabaseTable):\n    __tablename__ = u'%s'%s%s\n\n%s" % (className, tableName, colums, br, metafactory.toJsonMethod(cur, t[1]))
-            model_class = "class %s(DatabaseTable):\n    __tablename__ = u'%s'%s%s\n\n%s\n" % (p.singular_noun(className), tableName, colums, br, metafactory.toJsonMethod(cur, t[1]))
-
-            file = open('%s.py' % p.singular_noun(className.lower()), "w", encoding='utf-8')
-            file.write("""from sqlalchemy import *
+            singular_entity = p.singular_noun(className);
+            model_class = "class %s(DatabaseTable):\n    __tablename__ = u'%s'%s%s\n\n%s\n" % (singular_entity, tableName, colums, br, metafactory.toJsonMethod(cur, t[1]))
+            classes += model_class
+            if not single_file:
+                file = open('%s.py' % singular_entity.lower(), "w", encoding='utf-8')
+                file.write("""from sqlalchemy import *
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import *
@@ -38,10 +40,10 @@ DatabaseTable = declarative_base()
 
 
 """)
-            file.write(model_class);
-            file.close()
+                file.write(model_class)
+                file.close()
 
-        # return classes
+        return classes
     @staticmethod
     def colums(cur, tablename):
         print(cur,tablename)
